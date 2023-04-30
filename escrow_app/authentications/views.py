@@ -13,7 +13,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
 from escrow_app.authentications import serializers
-from escrow_app import utils, tasks, models, permissions
+from escrow_app import utils, tasks, models, permissions, producer
 
 class Register(GenericAPIView):
     '''
@@ -35,7 +35,7 @@ class Register(GenericAPIView):
                 domain_name = get_current_site(request).domain
                 tasks.send_email_verification_link.delay(serializers.data,domain_name)
                 # send message to admin app via queue
-                # producers.publish()
+                producer.publish()
                 return utils.CustomResponse.Success('Registered Sucessfully', status=status.HTTP_201_CREATED)
             return utils.CustomResponse.Failure(serializers.data, status=status.HTTP_201_CREATED)
 
