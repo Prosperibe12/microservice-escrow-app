@@ -33,11 +33,11 @@ class Register(GenericAPIView):
                 serializers.save()
                 # send email notificaion for account activation
                 domain_name = get_current_site(request).domain
-                tasks.send_email_verification_link.delay(serializers.data,domain_name)
+                tasks.email_verification_link.delay(serializers.data,domain_name)
                 # send message to admin app via queue
                 producer.publish()
                 return utils.CustomResponse.Success('Registered Sucessfully', status=status.HTTP_201_CREATED)
-            return utils.CustomResponse.Failure(serializers.data, status=status.HTTP_201_CREATED)
+            return utils.CustomResponse.Failure(serializers.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class VerifyEmail(APIView):
     '''
@@ -89,7 +89,7 @@ class PasswordResetRequest(GenericAPIView):
         serialized_data = self.serializer_class(data=request.data)
         if serialized_data.is_valid(raise_exception=True):
             domain_name = get_current_site(request).domain
-            tasks.send_password_reset_link.delay(serialized_data.validated_data, domain_name)
+            tasks.password_reset_link.delay(serialized_data.validated_data, domain_name)
             return utils.CustomResponse.Success("A Password Reset Link has been sent to your Email", status=status.HTTP_200_OK)
         return utils.CustomResponse.Failure(serialized_data.errors, status=status.HTTP_400_BAD_REQUEST)
 

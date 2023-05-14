@@ -1,10 +1,14 @@
+import random
+
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.contrib.auth.models import (BaseUserManager, AbstractBaseUser, PermissionsMixin)
 from django.utils.translation import gettext_lazy as _
 from auditlog.registry import auditlog
-from escrow_app.helpers.models import HelperModel
 
 from rest_framework_simplejwt.tokens import RefreshToken
+
+from escrow_app.helpers.models import HelperModel
 
 class MyUserManager(BaseUserManager):
     use_in_migrations = True
@@ -42,15 +46,10 @@ class User(HelperModel,AbstractBaseUser,PermissionsMixin):
     An abstract base class implementing a fully featured User model with
     admin-compliant permissions.
 
-    Email and password are required. Other fields are optional.
+    Email and password are required.
     """
-    first_name = models.CharField(_("first name"), max_length=150, blank=True, null=True)
-    last_name = models.CharField(_("last name"), max_length=150, blank=True, null=True)
     email = models.EmailField(_("email address"), blank=False, null=False, unique=True)
-    phone_number = models.CharField(_("Phone Number"), blank=False, null=False, max_length=14)
-    address = models.CharField(_("Residential address"), blank=True, max_length=150, null=True)
-    state = models.CharField(_("State of residence"), blank=True, max_length=150, null=True)
-    profile_pix = models.ImageField(_("profile image"), upload_to='profile_img', null=True)
+    reference_id = models.IntegerField(_("User Reference ID"), blank=True, null=True, unique=True)
     is_staff = models.BooleanField(
         _("staff status"),
         default=False,
@@ -80,11 +79,23 @@ class User(HelperModel,AbstractBaseUser,PermissionsMixin):
 
     EMAIL_FIELD = "email"
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["phone_number"]
 
     def __str__(self):
         return f"{self.email}"
 
+    # generate unique reference_id for user
+    def save(self, *args, **kwargs):
+        while not self.reference_id:
+            nos = str(random.randint(1,7))
+            nrs = [str(random.randrange(10)) for i in range(6-1)]
+            for i in range(len(nrs)):
+                nos += str(nrs[i])
+            ref_id = User.objects.filter(reference_id=nos)
+            if not ref_id:
+                self.reference_id=nos
+        super(User, self).save(*args, **kwargs) # Call the real save() method
+
+    # user tokens
     def tokens(self):
         tokens = RefreshToken.for_user(self)
         return {
@@ -93,3 +104,18 @@ class User(HelperModel,AbstractBaseUser,PermissionsMixin):
         }
 
 auditlog.register(model=User, exclude_fields=['password', 'last_login'])
+
+class UserProfile(HelperModel,models.Model):
+    '''
+    User Profile Table
+    '''
+    user = models.OneToOneField(User, on_delete=models.CASCADE, blank=True, null=True)
+    first_name = models.CharField(_("first name"), max_length=150, blank=False, null=False)
+    last_name = models.CharField(_("last name"), max_length=150, blank=False, null=False)
+    phone_number = models.CharField(_("Phone Number"), blank=False, null=False, max_length=14)
+    address = models.CharField(_("Residential address"), blank=False, max_length=150, null=False)
+    state = models.CharField(_("State of residence"), blank=False, max_length=150, null=False)
+    profile_pix = models.ImageField(_("profile image"), upload_to='profile_img', null=True, blank=True, validators=[FileExtensionValidator(allowed_extensions=['png','jpeg','jpg'])])
+    
+    def __str__(self) -> str:
+        return f"{self.first_name}::{self.last_name}"

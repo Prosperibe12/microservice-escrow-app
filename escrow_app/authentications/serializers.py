@@ -14,7 +14,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.User
-        fields = ['id','email','phone_number','password']
+        fields = ['id','email','password']
 
     def create(self, validated_data):
         return models.User.objects.create_user(**validated_data)
@@ -40,10 +40,8 @@ class LoginSerializer(serializers.ModelSerializer):
         try:
             access = models.User.objects.get(email=obj['email'])
             user = {
-                "first_name": access.first_name,
-                "last_name": access.last_name,
-                "address": access.address,
-                "state": access.state,
+                "reference_id": access.reference_id,
+                "is_verified": access.is_verified,
                 "is_updated": access.is_updated
             }
         except:
