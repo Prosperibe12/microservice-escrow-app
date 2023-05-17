@@ -15,17 +15,17 @@ class UserDetailSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = models.UserProfile
-        fields = ['owner','first_name', 'last_name', 'phone_number', 'address', 'state']
+        fields = ['owner','full_name', 'phone_number', 'address', 'state', 'lga']
 
 class UpdateUserDataSerializer(serializers.ModelSerializer):
     
     profile_pix = serializers.ImageField(required=False, write_only=True)
-    first_name = serializers.CharField(required=False)
-    last_name = serializers.CharField(required=False)
+    full_name = serializers.CharField(required=False)
     phone_number = serializers.CharField(required=False)
     address = serializers.CharField(required=False)
     state = serializers.CharField(required=False)
+    lga = serializers.CharField(required=False)
     
     class Meta:
         model = models.UserProfile
-        fields = ['first_name','last_name','phone_number','address','state','profile_pix']
+        fields = ['full_name','phone_number','address','state','lga','profile_pix']
