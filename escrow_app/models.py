@@ -110,11 +110,11 @@ class UserProfile(HelperModel,models.Model):
     User Profile Table
     '''
     user = models.OneToOneField(User, on_delete=models.CASCADE, blank=True, null=True)
-    first_name = models.CharField(_("first name"), max_length=150, blank=False, null=False)
-    last_name = models.CharField(_("last name"), max_length=150, blank=False, null=False)
+    full_name = models.CharField(_("full name"), max_length=150, blank=False, null=False, default="Hello User")
     phone_number = models.CharField(_("Phone Number"), blank=False, null=False, max_length=14)
     address = models.CharField(_("Residential address"), blank=False, max_length=150, null=False)
     state = models.CharField(_("State of residence"), blank=False, max_length=150, null=False)
+    lga = models.CharField(_("local govt area"), max_length=150, blank=False, null=False, default="lga")
     profile_pix = models.ImageField(_("profile image"), upload_to='profile_img', null=True, blank=True, validators=[FileExtensionValidator(allowed_extensions=['png','jpeg','jpg'])])
     
     def __str__(self) -> str:

@@ -14,9 +14,9 @@ admin.site.register(models.User, UserAdmin)
 class UserProfileAdmin(admin.ModelAdmin):
         list_display = (
         'user',
-        'first_name',
-        'last_name',
+        'full_name',
         'phone_number',
+        'address',
         'state',
         'profile_pix',
     )
