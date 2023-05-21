@@ -28,4 +28,4 @@ class UpdateUserDataSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = models.UserProfile
-        fields = ['full_name','phone_number','address','state','lga','profile_pix']
+        fields = ['user','full_name','phone_number','address','state','lga','profile_pix']

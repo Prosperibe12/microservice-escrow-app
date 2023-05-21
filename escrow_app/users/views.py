@@ -4,7 +4,7 @@ from rest_framework.parsers import (MultiPartParser, FormParser)
 
 from escrow_app import models
 from escrow_app.permissions import IsActiveVerifiedAuthenticated
-from escrow_app import utils
+from escrow_app import utils, producer
 from escrow_app.users import serializers
 
 
@@ -37,6 +37,8 @@ class UserProfile(APIView):
             user = models.User.objects.get(id=request.user.id)
             user.is_updated = True
             user.save()
+            # publish event
+            producer.publish('save_user_profile',serializer.data)
             return utils.CustomResponse.Success(serializer.data, status=status.HTTP_201_CREATED)
         return utils.CustomResponse.Failure(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -53,6 +55,8 @@ class UpdateUserProfile(APIView):
             serializer = self.serializer_class(instance=user, data=request.data)
             if serializer.is_valid():
                 serializer.save()
+                # publish event
+                producer.publish('update_user_profile',serializer.data)
                 return utils.CustomResponse.Success(serializer.data, status=status.HTTP_201_CREATED)
             return utils.CustomResponse.Failure(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except:
