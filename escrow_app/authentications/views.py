@@ -35,7 +35,7 @@ class Register(GenericAPIView):
                 domain_name = get_current_site(request).domain
                 tasks.email_verification_link.delay(serializers.data,domain_name)
                 # send message to admin app via queue
-                producer.publish()
+                producer.publish('user_created', serializers.data)
                 return utils.CustomResponse.Success('Registered Sucessfully', status=status.HTTP_201_CREATED)
             return utils.CustomResponse.Failure(serializers.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -57,6 +57,8 @@ class VerifyEmail(APIView):
             if not user.is_verified:
                 user.is_verified = True
                 user.save()
+                # send event to admin app
+                producer.publish('verify_account', payload['user_id'])
             return utils.CustomResponse.Success("Successfully Activated", status=status.HTTP_200_OK)
         except jwt.ExpiredSignatureError as e:
             return utils.CustomResponse.Failure("Activation Link Expired", status=status.HTTP_400_BAD_REQUEST)
@@ -141,5 +143,5 @@ class LogoutView(GenericAPIView):
         serializer_data = self.serializer_class(data=data)
         if serializer_data.is_valid(raise_exception=True):
             serializer_data.save()
-            return utils.CustomResponse.Success("Logged Successfully", status=status.HTTP_204_NO_CONTENT)
+            return utils.CustomResponse.Success("Logged Out Successfully", status=status.HTTP_204_NO_CONTENT)
         return utils.CustomResponse.Failure(serializer_data.errors, status=status.HTTP_400_BAD_REQUEST)
