@@ -5,17 +5,17 @@ from django.utils.http import urlsafe_base64_encode
 from decouple import config
 from django.urls import reverse
 
-from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import NotFound
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from escrow_app import models, utils
 
 class AuthNotificationFactory:
     
     @staticmethod
-    def register_email_notification(users, domain_name):
+    def register_email_notification(payload,domain_name):
         try:
-            user = models.User.objects.get(email=users['email'])
+            user = models.User.objects.get(email=payload['email'])
         except:
             models.User.DoesNotExist
         token = RefreshToken.for_user(user).access_token
@@ -23,13 +23,12 @@ class AuthNotificationFactory:
         subject = f"ACCOUNT VERIFICATION"
         absurl = 'http://'+domain_name+url_path+'?token='+str(token)
         message = f"Hello, \n Kindly use below link to activate your email \n  {absurl}"
-        # print("message: ",message)
+        print("message: ",message)
         try:
             msg = requests.post(
                 config("MAIL_BASE_URL"), 
-                auth=("api", 
-                config("MAILGUN_SECRET_KEY")), 
-                data = {"from": config("MAIL_SENDER"), "to": [user.email], "subject": subject, "text": message}
+                auth=("api", config("MAILGUN_SECRET_KEY")), 
+                data = {"from": config("MAIL_SENDER"), "to": [payload['email']], "subject": subject, "text": message}
             )
             return msg
         except Exception as e:
@@ -54,7 +53,7 @@ class AuthNotificationFactory:
         subject = f"PASSWORD RESET REQUEST"
         absurl = 'http://'+domain_name+abs_path
         message = f"Hello, \n Kindly use below link to reset your password \n {absurl}"
-        
+        print("Password reset :",message)
         # send email
         try:
             msg = requests.post(

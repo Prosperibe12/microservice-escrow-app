@@ -15,14 +15,22 @@ services:
     volumes:
       - ./redis.conf:/usr/local/etc/redis/redis.conf
 
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
   celery:
     build: .
-    command: celery -A project_core worker --without-gossip -l INFO
-    # env_file:
-    #   - ./.env
-    # depends_on:
-    #   - redis
+    command: celery -A project_core worker --without-gossip --pool=solo -l INFO
+    depends_on:
+      - backend_app
 
-  app_queue:
-    build: .
-    command: python consumer.py
+  # app_queue:
+  #   build: .
+  #   command: python consumer.py

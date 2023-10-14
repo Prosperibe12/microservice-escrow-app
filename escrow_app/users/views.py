@@ -38,7 +38,7 @@ class UserProfile(APIView):
             user.is_updated = True
             user.save()
             # publish event
-            producer.publish('save_user_profile',serializer.data)
+            # producer.publish('save_user_profile',serializer.data)
             return utils.CustomResponse.Success(serializer.data, status=status.HTTP_201_CREATED)
         return utils.CustomResponse.Failure(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -56,7 +56,7 @@ class UpdateUserProfile(APIView):
             if serializer.is_valid():
                 serializer.save()
                 # publish event
-                producer.publish('update_user_profile',serializer.data)
+                # producer.publish('update_user_profile',serializer.data)
                 return utils.CustomResponse.Success(serializer.data, status=status.HTTP_201_CREATED)
             return utils.CustomResponse.Failure(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except:

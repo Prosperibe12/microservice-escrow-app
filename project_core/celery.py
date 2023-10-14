@@ -6,7 +6,7 @@ from decouple import config
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'project_core.settings')
 
-app = Celery('project_core', broker=config('AMPQ_URL'))
+app = Celery('project_core', broker=config('CELERY_BROKER_URL'))
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
 app.autodiscover_tasks()
