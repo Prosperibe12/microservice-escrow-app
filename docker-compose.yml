@@ -27,7 +27,7 @@ services:
 
   celery:
     build: .
-    command: celery -A project_core worker --without-gossip --pool=solo -l INFO
+    command: celery -A project_core worker --pool=solo -l INFO
     depends_on:
       - backend_app
 

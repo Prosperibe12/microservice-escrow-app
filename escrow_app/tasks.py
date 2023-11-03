@@ -1,7 +1,9 @@
 from __future__ import absolute_import, unicode_literals
 from celery import shared_task
 
+from escrow_app import models
 from escrow_app.authentications import utils
+from escrow_app.services import utils
 
 '''
 **************************************************************************
@@ -21,3 +23,13 @@ def password_reset_link(users, domain_name):
     # trigger register_email_notification method
     if sender is not None:
         sender.send_password_reset_email(users, domain_name)
+
+'''
+**************************************************************************
+TRANSACTION CELERY TASKS
+***************************************************************************
+'''
+@shared_task(name='process_transaction_products')
+def process_transaction_product(data,trans):
+    '''This task handles the process of saving transaction products asynchronously'''
+    utils.product_transaction(data,trans)
