@@ -3,5 +3,7 @@ from escrow_app.services import views
 
 urlpatterns = [
     path("user_name/", views.GetUserName.as_view(), name='user_name'),
-    path("new/", views.BuyerTransactionView.as_view(), name='new_transaction')
+    path("new/", views.BuyerTransactionView.as_view(), name='new_transaction'),
+    path("open/", views.SellerTransactionView.as_view({'get':'list'}), name='open_transactions'),
+    path("open/<str:id>/", views.SellerTransactionView.as_view({'get':'retrieve','put':'update'}),name='single_open_transaction')
 ]
