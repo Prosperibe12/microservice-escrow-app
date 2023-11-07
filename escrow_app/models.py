@@ -11,6 +11,7 @@ from auditlog.registry import auditlog
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from escrow_app.helpers.models import HelperModel
+from escrow_app.services.paystack import PayStack
 
 class MyUserManager(BaseUserManager):
     use_in_migrations = True
@@ -164,7 +165,7 @@ class Product(models.Model):
 class Order(HelperModel,models.Model):
     '''This table holds record of payment transactions'''
     ORDER_STATUS = (
-        ('Payment Received', 'Payment Received'),
+        ('Order Created', 'Order Created'),
         ('Payment Completed', 'Payment Completed'),
         ('Order Canceled', 'Order Canceled'),
     )
@@ -185,4 +186,22 @@ class Order(HelperModel,models.Model):
             if not obj_with_sm_ref:
                 self.ref = ref 
         super().save(*args, **kwargs)
+          
+    # verify payment
+    def verify_payment(self):
+        
+        paystack = PayStack()
+        status, result = paystack.verify_payment(self.ref, self.amount)
+        
+        if status:
+            if result['amount']/100 == self.amount:
+               self.order_status = 'Payment Received' 
+            self.save() 
+            return True 
+        return False 
+        
     
+# {
+#    "email": "roketragroite-1595@yopmail.com",
+#    "password": "Password123"
+# }

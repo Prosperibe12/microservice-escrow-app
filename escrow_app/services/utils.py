@@ -33,4 +33,18 @@ def product_transaction(data,trans):
                           )for d in data]
     # use bulk_create to create multiple new log objects
     models.Product.objects.bulk_create(logs)
-    print("saved")
+  
+def create_transaction_order(data):
+    '''This function creates order when buyer accepts to proceed with the
+        transaction terms, order status is set as 'Order Created'.
+    '''
+    try:
+        transaction = models.Transaction.objects.get(Transaction_id=data['Transaction_id'])
+    except:
+        models.Transaction.DoesNotExist("Object Not Found")
+    amount = compute_total_amount(data['product_list'])
+    models.Order.objects.create(
+        Transaction_details=transaction,
+        amount=amount,
+        status='Order Created'
+    )

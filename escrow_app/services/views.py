@@ -1,6 +1,11 @@
+from datetime import datetime 
+import random
+
 from django.db import transaction
+from django.contrib.sites.shortcuts import get_current_site
+from django.urls import reverse
 from rest_framework.views import APIView
-from rest_framework import status
+from rest_framework import status, viewsets
 
 from escrow_app.services import serializers
 from escrow_app import permissions, models, utils, tasks
@@ -79,6 +84,8 @@ class BuyerTransactionView(APIView):
             # Notify Seller of transaction Approval
             deserialized_data = self.serializer_class(
                 models.Transaction.objects.get(Transaction_id=transaction_id))
+            # create transaction order
+            tasks.create_transaction_order.delay(deserialized_data.data)
             # send task to celery
             # send_price_change_notification_task.delay(deserialized_data.data, 'Site', False)
             return utils.CustomResponse.Success(data="Kindly wait for seller's Approval", status=status.HTTP_201_CREATED)
@@ -90,13 +97,55 @@ class BuyerTransactionView(APIView):
         # send_price_change_notification_task.delay(deserialized_data.data, 'Site', False)
         return utils.CustomResponse.Success(data="Transaction Canceled successfully", status=status.HTTP_200_OK)
 
-class SellerTransactionView(APIView):
+class SellerTransactionView(viewsets.ViewSet):
     
-    def get(self, request):
-        pass 
+    serializer_class = serializers.TransactionSerializer
+    permission_classes = [permissions.IsActiveVerifiedAuthenticated]
+    
+    def list(self, request):
+        serialized_data = self.serializer_class(
+            models.Transaction.objects.filter(
+                seller_id=request.user.reference_id, buyer_approval=True,Transaction_status='Open'),many=True)
+        return utils.CustomResponse.Success(serialized_data.data, status=status.HTTP_200_OK)
+    
+    def retrieve(self, request, id):
+        serialized_data = self.serializer_class(
+            models.Transaction.objects.get(Transaction_id=id))
+        return utils.CustomResponse.Success(serialized_data.data, status=status.HTTP_200_OK)
+    
+    def update(self, request, id):
+        transaction_status = request.data.get('seller_approval', None)
+        rejection_note = request.data.get('Rejection_note', None)
+        models.Transaction.objects.filter(
+            Transaction_id=id).update(seller_approval=transaction_status,Actor=request.user,rejection_note=rejection_note)
+        # check approval status
+        if transaction_status == True:
+            # Notify buyer of transaction Approval
+            deserialized_data = self.serializer_class(
+                models.Transaction.objects.get(Transaction_id=id))
+            # send task to celery
+            # send_price_change_notification_task.delay(deserialized_data.data, 'Site', False)
+            return utils.CustomResponse.Success(data="Transaction Approved, Wait for buyer's payment", status=status.HTTP_201_CREATED)
+        models.Transaction.objects.filter(
+            Transaction_id=id).update(Transaction_status='Canceled')
+        # notify buyer of Canceled Transaction
+        deserialized_data = self.serializer_class(
+            models.Transaction.objects.get(Transaction_id=id))
+        # send_price_change_notification_task.delay(deserialized_data.data, 'Site', False)
+        return utils.CustomResponse.Success(data="Transaction Canceled successfully", status=status.HTTP_200_OK)
+
+class Payment(APIView):
+    '''A class that handles paystack payments'''
     
     def post(self, request):
-        pass 
-    
-    def put(self, request):
-        pass 
+        # paystack api endpoint
+        url = "https://api.paystack.co/transaction/initialize"
+
+        reference = f"SLN{datetime.datetime.now()}{random.randint(1,10)}"
+        callbackurl = get_current_site(request).domain+reverse('')
+        fields = {
+            "email": request.data["email"],
+            "amount": int(request.data["amount"]*100),
+            "reference": reference,
+            "callback": callbackurl
+        }
