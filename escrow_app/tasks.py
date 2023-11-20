@@ -1,9 +1,9 @@
 from __future__ import absolute_import, unicode_literals
 from celery import shared_task
 
-from escrow_app import models
 from escrow_app.authentications.utils import AuthNotificationFactory
 from escrow_app.services import utils
+from escrow_app.notifications import utils as ut
 
 '''
 **************************************************************************
@@ -36,4 +36,18 @@ def process_transaction_product(data,trans):
     
 @shared_task(name='create_transaction_order')
 def create_transaction_order(data):
-    utils.create_transaction_order(data) 
+    utils.create_transaction_order(data)
+
+'''
+**************************************************************************
+NOTIFICATION CELERY TASKS
+***************************************************************************
+'''
+@shared_task(name='send_buyer_transaction_approval')
+def send_buyer_transaction_approval(price_change_request, designation, is_initial_price):
+    # Use factory to get a Transaction Alarm notifier class based on the Request Status
+    notifier = ut.NotificationAlarmFactory(
+        price_change_request, designation, is_initial_price).create_alarm_notifier()
+    # trigger notifier notify method
+    if notifier is not None:
+        notifier.notify()
