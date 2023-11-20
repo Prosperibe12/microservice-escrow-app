@@ -2,6 +2,9 @@ from django.conf import settings
 import requests
 
 class PayStack:
+    """
+    This class handles Paystack API transaction verification
+    """
     PAYSTACK_SECRET_KEY = settings.PAYSTACK_SECRET_KEY 
     base_url = 'https://api.paystack.co'
     

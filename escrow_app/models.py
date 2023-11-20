@@ -119,7 +119,7 @@ class UserProfile(HelperModel,models.Model):
     state = models.CharField(_("State of residence"), blank=False, max_length=150, null=False)
     lga = models.CharField(_("local govt area"), max_length=150, blank=False, null=False, default="lga")
     profile_pix = models.ImageField(_("profile image"), upload_to='profile_img', null=True, blank=True, validators=[FileExtensionValidator(allowed_extensions=['png','jpeg','jpg'])])
-    
+
     def __str__(self) -> str:
         return f"{self.first_name}::{self.last_name}"
 
@@ -152,6 +152,7 @@ class Transaction(HelperModel,models.Model):
     
     def __str__(self) -> str:
         return f'{self.Transaction_id}'
+
 class Product(models.Model):
     category = models.CharField(max_length=100)
     product_name = models.CharField(max_length=100)
@@ -181,26 +182,24 @@ class Order(HelperModel,models.Model):
     # generate reference code
     def save(self, *args, **kwargs):
         while not self.ref:
-            ref = {secrets.token_urlsafe(15)}+{datetime.datetime.now()}
+            ref = f"SLN{secrets.token_urlsafe(15)}{datetime.now()}"
             obj_with_sm_ref = Order.objects.filter(ref=ref)
             if not obj_with_sm_ref:
                 self.ref = ref 
         super().save(*args, **kwargs)
-          
+  
     # verify payment
     def verify_payment(self):
-        
         paystack = PayStack()
         status, result = paystack.verify_payment(self.ref, self.amount)
         
         if status:
             if result['amount']/100 == self.amount:
-               self.order_status = 'Payment Received' 
+               self.order_status = 'Payment Completed' 
             self.save() 
             return True 
         return False 
-        
-    
+
 # {
 #    "email": "roketragroite-1595@yopmail.com",
 #    "password": "Password123"
