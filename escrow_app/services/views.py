@@ -86,14 +86,14 @@ class BuyerTransactionView(APIView):
             # create transaction order
             tasks.create_transaction_order.delay(deserialized_data.data)
             # Notify Seller of transaction Approval
-            # send_price_change_notification_task.delay(deserialized_data.data, 'Site', False)
+            tasks.send_buyer_transaction_approval.delay(deserialized_data.data, 'Buyer', True)
             return utils.CustomResponse.Success(data="Kindly wait for seller's Approval", status=status.HTTP_201_CREATED)
         models.Transaction.objects.filter(
             Transaction_id=transaction_id).update(Transaction_status='Canceled')
         # notify Seller of Canceled Transaction
         deserialized_data = self.serializer_class(
             models.Transaction.objects.get(Transaction_id=transaction_id))
-        # send_price_change_notification_task.delay(deserialized_data.data, 'Site', False)
+        tasks.send_buyer_transaction_approval.delay(deserialized_data.data, 'Buyer', False)
         return utils.CustomResponse.Success(data="Transaction Canceled successfully", status=status.HTTP_200_OK)
 
 class SellerTransactionView(viewsets.ViewSet):
@@ -131,15 +131,15 @@ class SellerTransactionView(viewsets.ViewSet):
             trans_status.save()
             # Notify buyer of transaction Approval
             deserialized_data = self.serializer_class(trans_status)
-            # send task to celery to nnotify buyer of approved transaction and proceed to payment
-            # send_price_change_notification_task.delay(deserialized_data.data, 'Site', False)
+            # send task to celery to notify buyer of approved transaction and proceed to payment
+            tasks.send_buyer_transaction_approval.delay(deserialized_data.data, 'Seller', True)
             return utils.CustomResponse.Success(data="Transaction Approved, Wait for buyer's payment", status=status.HTTP_201_CREATED)
         models.Transaction.objects.filter(
             Transaction_id=id).update(Transaction_status='Canceled')
         # notify buyer of Canceled Transaction
         deserialized_data = self.serializer_class(
             models.Transaction.objects.get(Transaction_id=id))
-        # send_price_change_notification_task.delay(deserialized_data.data, 'Site', False)
+        tasks.send_buyer_transaction_approval.delay(deserialized_data.data, 'Seller', False)
         return utils.CustomResponse.Success(data="Transaction Canceled successfully", status=status.HTTP_200_OK)
 
 class Payment(viewsets.ViewSet):

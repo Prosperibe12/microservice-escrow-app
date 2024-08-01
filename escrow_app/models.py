@@ -121,7 +121,7 @@ class UserProfile(HelperModel,models.Model):
     profile_pix = models.ImageField(_("profile image"), upload_to='profile_img', null=True, blank=True, validators=[FileExtensionValidator(allowed_extensions=['png','jpeg','jpg'])])
 
     def __str__(self) -> str:
-        return f"{self.first_name}::{self.last_name}"
+        return f"{self.full_name}"
 
 class Transaction(HelperModel,models.Model):
     """Transaction Record Table"""
