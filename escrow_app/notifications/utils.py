@@ -12,14 +12,32 @@ from decouple import config
 # client = Client(account_sid, auth_token)
 
 
-class PriceAlarmNotifier:
+class TransactionAlarmNotifier:
+    """
+    Transaction Alarm Notifier.
+    """
     alarm_type = ''
     email_template_name = ''
     email_subject = ''
     mail_list = ''
     phone_msg_template = ''
     push_notification_msg_template = ''
+    # initialize variables
+    def __init__(self, approval_request):
+        
+        self.approval_request = approval_request
+        transaction_initiator = models.UserProfile.objects.get(user=self.approval_request['Initiator']).full_name
+        transaction_approver = models.UserProfile.objects.get(user=self.approval_request['Actor']).full_name
+        self.context = {
+            'price': self.approval_request['product_total_amount'],
+            'sheduled_time': self.approval_request['transaction_duration'],
+            'Initiator': transaction_initiator,
+            'approver': transaction_approver,
+            'rejection_note': self.approval_request['rejection_note'],
+            "created_time": self.approval_request['created_at'],
+        }
 
+      
     def __init__(self, price_change):
         self.price_change = price_change
 
@@ -66,7 +84,7 @@ class PriceAlarmNotifier:
     def get_phone_msg_body(self):
         raise NotImplementedError('Subclass must override this')
 
-    # send alarm email notification
+    # send email notification
     def send_alarm_notification(self):
         mail_recipients = self.extract_recipient_list()
         msg_subject = self.get_mail_subject()
@@ -74,8 +92,7 @@ class PriceAlarmNotifier:
         if len(mail_recipients) > 0:
             for each in mail_recipients:
                 self.context["full_username"] = each['Name']
-                emailmsg = loader.render_to_string(
-                    self.email_template_name, self.context)
+                emailmsg = loader.render_to_string(self.email_template_name, self.context)
                 msg = requests.post(
                     config("MAIL_BASE_URL"), 
                     auth=("api", 
@@ -84,26 +101,20 @@ class PriceAlarmNotifier:
                 )
                 if msg.status_code == 200:
                     print("True")
-                # email = EmailMessage(msg_subject, emailmsg,
-                #                      'support@smartflowtech.com', [each['Email']],)
-                # email.content_subtype = "html"
-                # email.send(fail_silently=True)
-            # send data to db
     
     def save_data_to_db(self):
         msg_context = self.context
         title = self.get_mail_subject()
-        message = self.get_phone_msg_body(msg_context['full_username'], msg_context['price'], msg_context['product_name'],  msg_context['site_name'],  msg_context['sheduled_time'],  msg_context['Initiator'],  msg_context['price_change_created_time'], msg_context['company_name'], msg_context['approver'], msg_context['updated_time'], msg_context['rejection_note'])
+        message = self.get_phone_msg_body(msg_context['approver'], msg_context['price'],msg_context['Initiator'],  msg_context['created_time'])
         status = 'Unread'
-        # user_id = self.price_change['Initiator']
         message_recipients = self.extract_recipient_list()
         if len(message_recipients) > 0:
             for each in message_recipients:
                 user_obj = models.User.objects.get(pk=each['id'])
-                company= user_obj.Company
                 try:
-                    models.Notifications.objects.create(title=title,message=message,status=status,user=user_obj,company=company)
+                    models.Notifications.objects.create(title=title,message=message,status=status,user=user_obj)
                 except:
+                    # log to file
                     print("i did not save")
 
     # send phone message notification
@@ -116,13 +127,10 @@ class PriceAlarmNotifier:
             for each in msg_recipients:
                 self.context["full_username"] = each['Name']
                 # send msg through twilio
-                print('msg receiver', each['Phone_number'])
-                # full_username, price, product_name,  site_name,  sheduled_time,  Initiator, price_change_created_time, company_name, approver,updated_time,rejection_note
                 message = client.messages.create(
-                    body=self.get_phone_msg_body(
-                        msg_context['full_username'], msg_context['price'], msg_context['product_name'],  msg_context['site_name'],  msg_context['sheduled_time'],  msg_context['Initiator'],  msg_context['price_change_created_time'], msg_context['company_name'], msg_context['approver'], msg_context['updated_time'], msg_context['rejection_note']),
-                    from_='Smart Pump',
-                    to='+2348157787640'
+                    body=self.get_phone_msg_body(msg_context['approver'], msg_context['price'],msg_context['Initiator'],  msg_context['created_time']),
+                    from_='Escrow Trust',
+                    to=''
                 )
 
     # send push notification mobile
@@ -137,11 +145,8 @@ class PriceAlarmNotifier:
                     utils.push_pricealarm_notification(id, msg_subject)
                     print("I pushed notification")
                 except:
+                    # log to file
                     print("i did not push")
-                # push to mobile and web
-                # print('push receiver', each['id'])
-                # print('push subject', msg_subject)
-                # print('push_content', msg_content)
 
     def notify(self):
         self.send_alarm_notification()
@@ -150,167 +155,127 @@ class PriceAlarmNotifier:
         # self.send_phone_notification()
 
 
-class CompanyPriceRejectionNotifier(PriceAlarmNotifier):
+class BuyerTransactionRejectionNotifier(TransactionAlarmNotifier):
+    """
+    Notify seller of canceled transaction.
+    """
     email_template_name = 'company_price_change_rejection.html'
-    email_subject = 'Your Price Change Request Was Rejected!'
+    email_subject = 'Transaction Request Was Canceled!'
     phone_msg_template = ''
     push_notification_msg_template = ''
 
     def extract_recipient_list(self):
-        # get initiator email
-        user_id = self.price_change['Initiator']
-        user_obj = models.User.objects.get(pk=user_id)
-        email = user_obj.Email
-        name = user_obj.Name
-        mobile_number = user_obj.Phone_number
+        # get Actor details
+        user_id = self.approval_request['Actor']
+        user_obj = models.UserProfile.objects.get(user=user_id)
+        email = user_obj.user.email
+        name = user_obj.full_name
+        mobile_number = user_obj.phone_number
+        
         return [{'Email': email, 'Name': name, 'id': user_id, 'Phone_number': mobile_number}]
 
     def get_mail_subject(self):
-        return f'Your Price Change Request Was Rejected!'
+        return f'Transaction Request Was Canceled!'
 
-    def get_phone_msg_body(self, full_name, price, product_name, site_name, sheduled_time, Initiator, price_change_created_time, company_name, approver, updated_time, rejection_note):
-        return f' Hello {full_name},\nYour request to make a price change of N{price} for {product_name} in all sites at {company_name} was rejected by {approver} at {updated_time} with this extra note = >{rejection_note}.'
+    def get_phone_msg_body(self, full_name, price, Initiator, created_time, approver, updated_time, rejection_note):
+        return f' Hello {full_name},\n The transaction deal of N{price} was cancelled by {Initiator} at {updated_time} with this extra note = >{rejection_note}.'
 
-class CompanyPriceApprovalNotifier(PriceAlarmNotifier):
-    email_template_name = 'company_price_change_approval.html'
-    email_subject = 'Your Price Change Request Was Approved!'
-    push_notification_msg_template = ''
-
-    def extract_recipient_list(self):
-        # get initiator details
-        user_id = self.price_change['Initiator']
-        user_obj = models.User.objects.get(pk=user_id)
-        email = user_obj.Email
-        name = user_obj.Name
-        mobile_number = user_obj.Phone_number
-        return [{'Email': email, 'Name': name, 'id': user_id, 'Phone_number': mobile_number}]
-
-    def get_mail_subject(self):
-        return f'Your Price Change Request Was Approved!'
-    # full_name, price, product_name, site_name, sheduled_time, Initiator, price_change_created_time, company_name, approver, updated_time, rejection_note
-
-    def get_phone_msg_body(self, full_name, price, product_name, site_name, sheduled_time, Initiator, price_change_created_time, company_name, approver, updated_time, rejection_note):
-        return f' Hello {full_name}, \nYour request to make a price change of ₦{price} for {product_name} by {sheduled_time} at all sites in {company_name} was successfully approved by {approver} at {updated_time}.'
-
-class SitePriceRejectionNotifier(PriceAlarmNotifier):
+class TransactionRejectionNotifier(TransactionAlarmNotifier):
+    """
+    Notifiy buyer when seller rejects transaction deal.
+    """
     email_template_name = 'site_price_change_rejection.html'
-    email_subject = 'Your Price Change Request Was Rejected!'
+    email_subject = 'Your Transaction Request Was Rejected!'
     push_notification_msg_template = ''
-
+    
     def extract_recipient_list(self):
         # get initiator details
-        user_id = self.price_change['Initiator']
-        user_obj = models.User.objects.get(pk=user_id)
-        email = user_obj.Email
-        name = user_obj.Name
-        mobile_number = user_obj.Phone_number
+        user_id = self.approval_request['Initiator']
+        user_obj = models.UserProfile.objects.get(user=user_id)
+        email = user_obj.user.email
+        name = user_obj.full_name
+        mobile_number = user_obj.phone_number
+        
         return [{'Email': email, 'Name': name, 'id': user_id, 'Phone_number': mobile_number}]
 
     def get_mail_subject(self):
-        return f'Your Price Change Request Was Rejected!'
+        return f'Your Transaction Request Was Rejected!'
 
-    def get_phone_msg_body(self, full_name, price, product_name, site_name, sheduled_time, Initiator, price_change_created_time, company_name, approver, updated_time, rejection_note):
-        return f' Hello {full_name},\nYour request to make a price change of ₦{price} for {product_name} in {site_name} was rejected by {approver} at {updated_time} with this extra note = >{rejection_note}.'
+    def get_phone_msg_body(self, full_name, price, Initiator, created_time, approver, updated_time, rejection_note):
+        return f' Hello {full_name},\nYour transaction request of ₦{price} was rejected by {approver} at {updated_time} with this extra note = >{rejection_note}.'
 
-class SitePriceApprovalNotifier(PriceAlarmNotifier):
+class TransactionApprovalNotifier(TransactionAlarmNotifier):
+    """
+    Notify initiator of approved transaction by seller
+    """
     email_template_name = 'site_price_change_approval.html'
-    email_subject = 'Your Price Change Request Was Approved!'
+    email_subject = 'Your Transaction Request Was Approved!'
     push_notification_msg_template = ''
 
     def extract_recipient_list(self):
         # get initiator details
-        user_id = self.price_change['Initiator']
-        user_obj = models.User.objects.get(pk=user_id)
-        email = user_obj.Email
-        name = user_obj.Name
-
-        mobile_number = user_obj.Phone_number
+        user_id = self.approval_request['Initiator']
+        user_obj = models.UserProfile.objects.get(user=user_id)
+        email = user_obj.user.email
+        name = user_obj.full_name
+        mobile_number = user_obj.phone_number
+        
         return [{'Email': email, 'Name': name, 'id': user_id, 'Phone_number': mobile_number}]
 
     def get_mail_subject(self):
-        return f'Your Price Change Request Was Approved!'
+        return f'Your Transaction Request Was Approved!'
 
-    def get_phone_msg_body(self, full_name, price, product_name, site_name, sheduled_time, Initiator, price_change_created_time, company_name, approver, updated_time, rejection_note):
-        return f' Hello {full_name}, Your request to make a price change of N{price} for {product_name} in {site_name} was successfully approved by {approver} at {updated_time}.'
+    def get_phone_msg_body(self, full_name, price, Initiator, created_time, approver, updated_time):
+        return f' Hello {full_name}, Your transaction request of ₦{price} was successfully approved by {approver} at {updated_time}.'
 
-class SitePriceRequestNotifier(PriceAlarmNotifier):
+class TransactionRequestNotifier(TransactionAlarmNotifier):
+    """
+    Notify seller of pending transaction approval request by buyer.
+    """
     email_template_name = 'site_price_change_request.html'
-    email_subject = 'A New Price Change at  Request Requires Your Action!'
-
+    email_subject = 'A New Transaction Request Requires Your Action!'
+    
     def extract_recipient_list(self):
-        # get users with Company Admin Role and Super User Role
-        company = self.price_change['Company']
-        if company == 1:
-            recipients = models.User.objects.filter(
-                Email__in=['muhammad.salihu@smartflowtech.com','idowu.sekoni@smartflowtech.com'], is_active=True).values('Email', 'Name', 'id', 'Phone_number')
-            # recipients = models.User.objects.filter(
-            #     Company=company, Role__Role_id__in=[3], is_active=True).values('Email', 'Name', 'id', 'Phone_number')
-        else:
-            recipients = models.User.objects.filter(
-                Company=company, Role__Role_id__in=[2], is_active=True).values('Email', 'Name', 'id', 'Phone_number')
-        return recipients
-
+        # get Actor details
+        user_id = self.approval_request['Actor']
+        user_obj = models.UserProfile.objects.get(user=user_id)
+        email = user_obj.user.email
+        name = user_obj.full_name
+        mobile_number = user_obj.phone_number
+        
+        return [{'Email': email, 'Name': name, 'id': user_id, 'Phone_number': mobile_number}]
+    
     def get_mail_subject(self):
-        site_name = (models.Sites.objects.get(
-            pk=self.price_change['Site'])).Name
-        return f'A New Price Change Request for {site_name} Requires Your Action!'
+        name = (models.UserProfile.objects.get(
+            user=self.approval_request['Initiator'])).full_name
+        return f'A Transaction Request Approval from {name} Requires Your Action!'
 
      #full_name, price, product_name, site_name, sheduled_time, Initiator, price_change_created_time, company_name, approver, updated_time, rejection_note
 
-    def get_phone_msg_body(self, full_username, price, product_name,  site_name,  sheduled_time,  Initiator, price_change_created_time, company_name, approver, updated_time, rejection_note):
-        return f'Hello {full_username}, A new price change request of ₦{price} for {product_name} at {site_name} needs your approval to take effect by {sheduled_time}. Please note that this request was initiated by {Initiator} at  {price_change_created_time}.'
-
-class CompanyPriceRequestNotifier(PriceAlarmNotifier):
-    email_template_name = 'company_price_change_request.html'
-    email_subject = 'A New Price Change Request Requires Your Action!'
-    push_notification_msg_template = ''
-
-    def extract_recipient_list(self):
-        # get users with Company Admin Role
-        # Only get super admin if company is Smartflow
-        company = self.price_change['Company']
-        if company == 1:
-            recipients = models.User.objects.filter(
-                Email__in=['muhammad.salihu@smartflowtech.com','idowu.sekoni@smartflowtech.com','jamiu.adeyemi@smartflowtech.com'], is_active=True).values('Email', 'Name', 'id', 'Phone_number')
-
-            # recipients = models.User.objects.filter(
-            #     Company=company, Role__Role_id__in=[3], is_active=True).values('Email', 'Name', 'id', 'Phone_number')
-        else:
-            recipients = models.User.objects.filter(
-                Company=company, Role__Role_id__in=[2], is_active=True).values('Email', 'Name', 'id', 'Phone_number')
-        return recipients
-
-    def get_mail_subject(self):
-        company_name = (models.Companies.objects.get(
-            pk=self.price_change['Company'])).Name
-        return f'A New Price Change Request at {company_name} Requires Your Action!'
-
-    # full_name, price, product_name, site_name, sheduled_time, Initiator, price_change_created_time, company_name, approver, updated_time, rejection_note
-
-    def get_phone_msg_body(self, full_username, price, product_name,  site_name,  sheduled_time,  Initiator, price_change_created_time, company_name, approver, updated_time, rejection_note):
-        return f' Hello {full_username},\nA new price change request of ₦{price} for {product_name} in all sites in  {company_name} needs your approval(or rejection) to take effect by {sheduled_time}.\nAn approval means all sites would be selling {product_name} at the rate of ₦{price}/Unit.\nPlease note that this request was initiated by {Initiator} at {price_change_created_time}.'
-
+    def get_phone_msg_body(self, full_name, price, Initiator, created_time, approver, updated_time):
+        return f'Hello {full_name}, A new transaction request of ₦{price}  needs your approval. Please note that this request was initiated by {Initiator} at  {created_time}.'
 
 class NotificationAlarmFactory:
-    # designation means price_change is for company or site
-    def __init__(self, price_change_request, designation, is_initial_price):
-        self.price_change = price_change_request
+    # designation Buyer/Seller        
+    def __init__(self, approval_request, designation, status):
+        self.approval_request = approval_request
         self.designation = designation
-        self.is_initial_price = is_initial_price
+        self.status = status
 
     def create_alarm_notifier(self):
-        # 5 alarm levels exist
-        # 1.Company Price Approved 2.Company Price Rejected
-        # 3.Site Price Approved 4.Site Price Rejected 5. Price Change Request
-        if self.price_change['Approved'] == True and self.designation == "Company":
-            return CompanyPriceApprovalNotifier(self.price_change)
-        elif self.price_change['Approved'] == False and self.designation == "Company":
-            return CompanyPriceRejectionNotifier(self.price_change)
-        elif self.price_change['Approved'] == True and self.designation == "Site":
-            return SitePriceApprovalNotifier(self.price_change)
-        elif self.price_change['Approved'] == False and self.designation == "Site":
-            return SitePriceRejectionNotifier(self.price_change)
-        elif self.is_initial_price and self.designation == "Company":
-            return CompanyPriceRequestNotifier(self.price_change)
-        elif self.is_initial_price and self.designation == "Site":
-            return SitePriceRequestNotifier(self.price_change)
+        # 1.Buyer Rejection Notifier
+        # 2.Buyer Transaction Request Approval
+        # 3.Seller Approval Notifier
+        # 4.Seller Rejection Notifier
+        if self.approval_request['buyer_approval'] == True and self.designation == "Buyer":
+            return TransactionRequestNotifier(self.approval_request)
+        elif self.approval_request['buyer_approval'] == False and self.designation == "Buyer":
+            return BuyerTransactionRejectionNotifier(self.approval_request)
+        elif self.approval_request['seller_approval'] == True and self.designation == "Seller":
+            return TransactionApprovalNotifier(self.approval_request)
+        elif self.approval_request['seller_approval'] == False and self.designation == "Seller":
+            return TransactionRejectionNotifier(self.approval_request)
+
+"""
+Task: Modidy the extract_recipient_list() method to get Actor from `seller_id`
+"""
